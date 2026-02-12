@@ -1,8 +1,17 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import Welcome from './pages/Welcome'
+import Onboarding from './pages/Onboarding'
+import Dashboard from './pages/Dashboard'
+
 function App() {
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <h1 className="text-3xl font-bold text-gray-800">Cycle Sync</h1>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Welcome />} />
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
