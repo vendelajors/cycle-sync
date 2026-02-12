@@ -45,6 +45,34 @@ const STEPS = [
           { value: 'none', label: "I don't currently track" },
         ],
       },
+      {
+        id: 'birth_control',
+        label: 'Are you currently using hormonal birth control?',
+        type: 'select',
+        options: [
+          { value: 'none', label: 'No, not currently' },
+          { value: 'pill', label: 'Yes — the pill' },
+          { value: 'iud_hormonal', label: 'Yes — hormonal IUD (Mirena, Kyleena, etc.)' },
+          { value: 'patch', label: 'Yes — the patch' },
+          { value: 'ring', label: 'Yes — vaginal ring (NuvaRing)' },
+          { value: 'implant', label: 'Yes — implant (Nexplanon)' },
+          { value: 'shot', label: 'Yes — shot (Depo-Provera)' },
+          { value: 'iud_copper', label: 'Copper IUD (non-hormonal)' },
+          { value: 'other', label: 'Other' },
+        ],
+      },
+      {
+        id: 'bc_history',
+        label: 'Have you previously used hormonal birth control?',
+        type: 'select',
+        options: [
+          { value: 'never', label: 'Never used it' },
+          { value: 'less_6mo', label: 'Yes — stopped less than 6 months ago' },
+          { value: '6mo_1yr', label: 'Yes — stopped 6–12 months ago' },
+          { value: '1yr_2yr', label: 'Yes — stopped 1–2 years ago' },
+          { value: 'more_2yr', label: 'Yes — stopped 2+ years ago' },
+        ],
+      },
     ],
   },
   {
@@ -353,9 +381,34 @@ export default function Onboarding() {
                         </button>
                       )
                     })}
+                    
                   </div>
+                  
+                  
                 )}
-
+ {question.id === 'birth_control' &&
+                  answers['birth_control'] === 'other' && (
+                    <input
+                      type="text"
+                      placeholder="Tell us more..."
+                      value={answers['birth_control_other'] || ''}
+                      onChange={(e) => handleSelect('birth_control_other', e.target.value)}
+                      className="mt-3"
+                      style={{
+                        fontFamily: 'inherit',
+                        fontSize: 14,
+                        padding: '12px 16px',
+                        borderRadius: 10,
+                        border: '1px solid #e0ded9',
+                        background: 'white',
+                        color: '#2D2A3E',
+                        width: '100%',
+                        outline: 'none',
+                      }}
+                      onFocus={(e) => (e.target.style.borderColor = '#2D2A3E')}
+                      onBlur={(e) => (e.target.style.borderColor = '#e0ded9')}
+                    />
+                  )}
                 {question.type === 'multi' && (
                   <div className="flex flex-wrap gap-2">
                     {question.options.map((option) => {
@@ -428,6 +481,7 @@ export default function Onboarding() {
                         onBlur={(e) => (e.target.style.borderColor = '#e0ded9')}
                       />
                     )}
+                    
               </div>
             ))}
           </div>
