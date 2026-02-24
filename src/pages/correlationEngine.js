@@ -11,6 +11,16 @@
 import { makeAssignPhase } from './cycleData'
 
 /**
+ * Get the next calendar day as a YYYY-MM-DD string.
+ * Uses noon to avoid DST midnight-rollover issues.
+ */
+function getNextDay(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/**
  * Core analysis: group check-ins by phase, then compare outcomes
  * based on different input variables.
  *
@@ -43,6 +53,29 @@ export function analyzeCorrelations(checkins, detectedOvulDay = null) {
     if (phase && byPhase[phase]) byPhase[phase].push(c)
   })
 
+  // Date-indexed lookup for next-day outcome pairing
+  const checkinByDate = {}
+  checkins.forEach(c => { if (c.date) checkinByDate[c.date] = c })
+
+  // Next-day outcome helpers
+  const getNextDayOutcomes = (c) => {
+    const next = checkinByDate[getNextDay(c.date)]
+    if (!next) return null
+    return {
+      mood: parseFloat(next.mood),
+      energy: parseFloat(next.energy),
+      stress: parseFloat(next.stress),
+      sleep: parseFloat(next.sleep_quality),
+    }
+  }
+
+  const avgNextDay = (arr, field) => {
+    const vals = arr.map(c => getNextDayOutcomes(c)).filter(o => o !== null && !isNaN(o[field])).map(o => o[field])
+    return vals.length >= 2 ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null
+  }
+
+  const nextDayCount = (arr) => arr.filter(c => getNextDayOutcomes(c) !== null).length
+
   // ─── 1. PHASE PROFILES ───
   phases.forEach(phase => {
     const pc = byPhase[phase]
@@ -74,7 +107,7 @@ export function analyzeCorrelations(checkins, detectedOvulDay = null) {
     }
   })
 
-  // ─── 2. EXERCISE IMPACT ───
+  // ─── 2. EXERCISE IMPACT (next-day outcomes, fallback to same-day) ───
   phases.forEach(phase => {
     const pc = byPhase[phase]
     if (pc.length < 2) return
@@ -86,6 +119,9 @@ export function analyzeCorrelations(checkins, detectedOvulDay = null) {
       const vals = arr.map(c => parseFloat(c[field])).filter(v => !isNaN(v))
       return vals.length > 0 ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null
     }
+
+    // Prefer next-day outcomes; fall back to same-day if insufficient pairs
+    const useNextDay = nextDayCount(workoutDays) >= 2 && nextDayCount(restDays) >= 2
 
     const byType = {}
     workoutDays.forEach(c => {
@@ -100,35 +136,39 @@ export function analyzeCorrelations(checkins, detectedOvulDay = null) {
     const typeImpact = {}
     Object.entries(byType).forEach(([type, days]) => {
       if (days.length < 2) return
+      const typeUseNextDay = useNextDay && nextDayCount(days) >= 2
       typeImpact[type] = {
-        count: days.length,
-        mood: avgOf(days, 'mood'),
-        energy: avgOf(days, 'energy'),
-        stress: avgOf(days, 'stress'),
-        sleep: avgOf(days, 'sleep_quality'),
+        count: typeUseNextDay ? nextDayCount(days) : days.length,
+        mood: typeUseNextDay ? avgNextDay(days, 'mood') : avgOf(days, 'mood'),
+        energy: typeUseNextDay ? avgNextDay(days, 'energy') : avgOf(days, 'energy'),
+        stress: typeUseNextDay ? avgNextDay(days, 'stress') : avgOf(days, 'stress'),
+        sleep: typeUseNextDay ? avgNextDay(days, 'sleep') : avgOf(days, 'sleep_quality'),
+        isNextDay: typeUseNextDay,
       }
     })
 
     results.exerciseImpact[phase] = {
       workoutDays: {
-        count: workoutDays.length,
-        mood: avgOf(workoutDays, 'mood'),
-        energy: avgOf(workoutDays, 'energy'),
-        stress: avgOf(workoutDays, 'stress'),
-        sleep: avgOf(workoutDays, 'sleep_quality'),
+        count: useNextDay ? nextDayCount(workoutDays) : workoutDays.length,
+        mood: useNextDay ? avgNextDay(workoutDays, 'mood') : avgOf(workoutDays, 'mood'),
+        energy: useNextDay ? avgNextDay(workoutDays, 'energy') : avgOf(workoutDays, 'energy'),
+        stress: useNextDay ? avgNextDay(workoutDays, 'stress') : avgOf(workoutDays, 'stress'),
+        sleep: useNextDay ? avgNextDay(workoutDays, 'sleep') : avgOf(workoutDays, 'sleep_quality'),
+        isNextDay: useNextDay,
       },
       restDays: {
-        count: restDays.length,
-        mood: avgOf(restDays, 'mood'),
-        energy: avgOf(restDays, 'energy'),
-        stress: avgOf(restDays, 'stress'),
-        sleep: avgOf(restDays, 'sleep_quality'),
+        count: useNextDay ? nextDayCount(restDays) : restDays.length,
+        mood: useNextDay ? avgNextDay(restDays, 'mood') : avgOf(restDays, 'mood'),
+        energy: useNextDay ? avgNextDay(restDays, 'energy') : avgOf(restDays, 'energy'),
+        stress: useNextDay ? avgNextDay(restDays, 'stress') : avgOf(restDays, 'stress'),
+        sleep: useNextDay ? avgNextDay(restDays, 'sleep') : avgOf(restDays, 'sleep_quality'),
+        isNextDay: useNextDay,
       },
       byType: typeImpact,
     }
   })
 
-  // ─── 3. DIET IMPACT ───
+  // ─── 3. DIET IMPACT (next-day outcomes, fallback to same-day) ───
   phases.forEach(phase => {
     const pc = byPhase[phase]
     if (pc.length < 2) return
@@ -152,27 +192,47 @@ export function analyzeCorrelations(checkins, detectedOvulDay = null) {
     Object.entries(byTag).forEach(([tag, days]) => {
       if (days.length < 2) return
       const without = pc.filter(c => !(c.diet_tags || '').toLowerCase().includes(tag))
+      const tagUseNextDay = nextDayCount(days) >= 2 && nextDayCount(without) >= 2
+
+      const moodWith = tagUseNextDay ? avgNextDay(days, 'mood') : avgOf(days, 'mood')
+      const moodWithout = tagUseNextDay ? avgNextDay(without, 'mood') : avgOf(without, 'mood')
+      const energyWith = tagUseNextDay ? avgNextDay(days, 'energy') : avgOf(days, 'energy')
+      const energyWithout = tagUseNextDay ? avgNextDay(without, 'energy') : avgOf(without, 'energy')
+
       tagImpact[tag] = {
-        count: days.length,
-        mood: avgOf(days, 'mood'),
-        energy: avgOf(days, 'energy'),
-        stress: avgOf(days, 'stress'),
-        moodDiff: without.length >= 2 ? round(avgOf(days, 'mood') - avgOf(without, 'mood')) : null,
-        energyDiff: without.length >= 2 ? round(avgOf(days, 'energy') - avgOf(without, 'energy')) : null,
+        count: tagUseNextDay ? nextDayCount(days) : days.length,
+        mood: moodWith,
+        energy: energyWith,
+        stress: tagUseNextDay ? avgNextDay(days, 'stress') : avgOf(days, 'stress'),
+        moodDiff: moodWith != null && moodWithout != null ? round(moodWith - moodWithout) : null,
+        energyDiff: energyWith != null && energyWithout != null ? round(energyWith - energyWithout) : null,
+        isNextDay: tagUseNextDay,
       }
     })
 
     results.dietImpact[phase] = tagImpact
   })
 
-  // ─── 4. SUPPLEMENT IMPACT ───
+  // ─── 4. SUPPLEMENT IMPACT (hybrid: prefer next-day, fall back to same-day per checkin) ───
   phases.forEach(phase => {
     const pc = byPhase[phase]
     if (pc.length < 2) return
 
-    const avgOf = (arr, field) => {
-      const vals = arr.map(c => parseFloat(c[field])).filter(v => !isNaN(v))
-      return vals.length > 0 ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null
+    // Hybrid: use next-day outcome if available, otherwise same-day
+    const getOutcome = (c) => {
+      const nextDay = getNextDayOutcomes(c)
+      if (nextDay) return nextDay
+      return {
+        mood: parseFloat(c.mood),
+        energy: parseFloat(c.energy),
+        stress: parseFloat(c.stress),
+        sleep: parseFloat(c.sleep_quality),
+      }
+    }
+
+    const avgHybrid = (arr, field) => {
+      const vals = arr.map(c => getOutcome(c)[field]).filter(v => !isNaN(v))
+      return vals.length >= 2 ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null
     }
 
     const tookAll = pc.filter(c => c.supplements_taken === 'yes')
@@ -181,17 +241,17 @@ export function analyzeCorrelations(checkins, detectedOvulDay = null) {
     results.supplementImpact[phase] = {
       tookAll: tookAll.length >= 2 ? {
         count: tookAll.length,
-        mood: avgOf(tookAll, 'mood'),
-        energy: avgOf(tookAll, 'energy'),
-        stress: avgOf(tookAll, 'stress'),
-        sleep: avgOf(tookAll, 'sleep_quality'),
+        mood: avgHybrid(tookAll, 'mood'),
+        energy: avgHybrid(tookAll, 'energy'),
+        stress: avgHybrid(tookAll, 'stress'),
+        sleep: avgHybrid(tookAll, 'sleep'),
       } : null,
       tookNone: tookNone.length >= 2 ? {
         count: tookNone.length,
-        mood: avgOf(tookNone, 'mood'),
-        energy: avgOf(tookNone, 'energy'),
-        stress: avgOf(tookNone, 'stress'),
-        sleep: avgOf(tookNone, 'sleep_quality'),
+        mood: avgHybrid(tookNone, 'mood'),
+        energy: avgHybrid(tookNone, 'energy'),
+        stress: avgHybrid(tookNone, 'stress'),
+        sleep: avgHybrid(tookNone, 'sleep'),
       } : null,
     }
   })
@@ -212,6 +272,7 @@ function findTopCorrelations(results, byPhase) {
     if (data.workoutDays.count >= 2 && data.restDays.count >= 2) {
       const moodDiff = round(data.workoutDays.mood - data.restDays.mood)
       const energyDiff = round(data.workoutDays.energy - data.restDays.energy)
+      const lag = data.workoutDays.isNextDay ? 'next-day ' : ''
 
       if (Math.abs(moodDiff) >= 1) {
         correlations.push({
@@ -221,8 +282,8 @@ function findTopCorrelations(results, byPhase) {
           strength: Math.abs(moodDiff),
           metric: 'mood',
           message: moodDiff > 0
-            ? `In your ${phase} phase, workout days boost your mood by ${moodDiff} points vs rest days`
-            : `In your ${phase} phase, workout days actually lower your mood by ${Math.abs(moodDiff)} points — your body may need more rest here`,
+            ? `In your ${phase} phase, workout days boost your ${lag}mood by ${moodDiff} points vs rest days`
+            : `In your ${phase} phase, workout days actually lower your ${lag}mood by ${Math.abs(moodDiff)} points — your body may need more rest here`,
           data: { workoutAvg: data.workoutDays.mood, restAvg: data.restDays.mood },
         })
       }
@@ -235,8 +296,8 @@ function findTopCorrelations(results, byPhase) {
           strength: Math.abs(energyDiff),
           metric: 'energy',
           message: energyDiff > 0
-            ? `Exercise in your ${phase} phase gives you +${energyDiff} energy`
-            : `Exercise in your ${phase} phase drains your energy by ${Math.abs(energyDiff)} points — consider lighter movement`,
+            ? `Exercise in your ${phase} phase gives you +${energyDiff} ${lag}energy`
+            : `Exercise in your ${phase} phase drains your ${lag}energy by ${Math.abs(energyDiff)} points — consider lighter movement`,
           data: { workoutAvg: data.workoutDays.energy, restAvg: data.restDays.energy },
         })
       }
@@ -244,6 +305,7 @@ function findTopCorrelations(results, byPhase) {
       Object.entries(data.byType).forEach(([type, typeData]) => {
         const overall = results.phaseProfiles[phase]
         if (!overall || typeData.count < 2) return
+        const typeLag = typeData.isNextDay ? 'next-day ' : ''
 
         const moodVsAvg = round(typeData.mood - overall.mood)
         if (Math.abs(moodVsAvg) >= 1.5) {
@@ -255,8 +317,8 @@ function findTopCorrelations(results, byPhase) {
             metric: 'mood',
             workout: type,
             message: moodVsAvg > 0
-              ? `${capitalize(type)} during ${phase} boosts your mood to ${typeData.mood} (avg is ${overall.mood})`
-              : `${capitalize(type)} during ${phase} drops your mood to ${typeData.mood} (avg is ${overall.mood}) — try swapping for something gentler`,
+              ? `${capitalize(type)} during ${phase} boosts your ${typeLag}mood to ${typeData.mood} (avg is ${overall.mood})`
+              : `${capitalize(type)} during ${phase} drops your ${typeLag}mood to ${typeData.mood} (avg is ${overall.mood}) — try swapping for something gentler`,
             data: { typeAvg: typeData.mood, phaseAvg: overall.mood },
           })
         }
@@ -301,6 +363,7 @@ function findTopCorrelations(results, byPhase) {
 
   Object.entries(results.dietImpact).forEach(([phase, tags]) => {
     Object.entries(tags).forEach(([tag, data]) => {
+      const dietLag = data.isNextDay ? 'next-day ' : ''
       if (data.moodDiff !== null && Math.abs(data.moodDiff) >= 1) {
         correlations.push({
           phase,
@@ -310,8 +373,8 @@ function findTopCorrelations(results, byPhase) {
           metric: 'mood',
           tag,
           message: data.moodDiff > 0
-            ? `"${capitalize(tag)}" days in ${phase} boost your mood by ${data.moodDiff}`
-            : `"${capitalize(tag)}" days in ${phase} correlate with ${Math.abs(data.moodDiff)} lower mood`,
+            ? `"${capitalize(tag)}" days in ${phase} boost your ${dietLag}mood by ${data.moodDiff}`
+            : `"${capitalize(tag)}" days in ${phase} correlate with ${Math.abs(data.moodDiff)} lower ${dietLag}mood`,
           data: { withTag: data.mood, diff: data.moodDiff },
         })
       }
@@ -324,8 +387,8 @@ function findTopCorrelations(results, byPhase) {
           metric: 'energy',
           tag,
           message: data.energyDiff > 0
-            ? `"${capitalize(tag)}" eating in ${phase} gives you +${data.energyDiff} energy`
-            : `"${capitalize(tag)}" days in ${phase} lower your energy by ${Math.abs(data.energyDiff)}`,
+            ? `"${capitalize(tag)}" eating in ${phase} gives you +${data.energyDiff} ${dietLag}energy`
+            : `"${capitalize(tag)}" days in ${phase} lower your ${dietLag}energy by ${Math.abs(data.energyDiff)}`,
           data: { withTag: data.energy, diff: data.energyDiff },
         })
       }

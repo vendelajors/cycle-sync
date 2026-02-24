@@ -116,7 +116,7 @@ const insightTypeColors = {
 }
 
 /* ─── AI Insights Component ─── */
-function AIInsights({ checkins, bloodwork, wearable, phase, phaseKey, tempAnalysis, ringDays, insights, setInsights, riskFlags }) {
+function AIInsights({ checkins, bloodwork, wearable, phase, phaseKey, tempAnalysis, ringDays, insights, setInsights, riskFlags, todayCycleDay }) {
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(false)
 
@@ -169,6 +169,7 @@ function AIInsights({ checkins, bloodwork, wearable, phase, phaseKey, tempAnalys
       })()
 
       const system = buildSystemMessage('women\'s health analyst', `- Exactly 3 insights. Each body: 1-2 concise sentences — state the observation with a number, then briefly note the hormonal connection.
+- When yesterday's activities are provided, consider how they may have affected today's metrics (exercise recovery, diet effects, and supplement impacts often manifest the following day).
 
 OUTPUT FORMAT:
 {"insights":[{"title":"4-6 words","body":"1-2 concise sentences with data and hormonal why","type":"sleep|recovery|cycle|nutrition|activity|temperature"}]}`)
@@ -177,11 +178,70 @@ OUTPUT FORMAT:
         ? `HRV: ${wearable.avgSleepHrv}ms | RHR: ${wearable.nightRhr}bpm | Sleep: ${wearable.sleepScore} | Recovery: ${wearable.recoveryIndex}${wearable.avgSleepTemp ? `\nSkin temp deviation: ${wearable.avgSleepTemp > 0 ? '+' : ''}${wearable.avgSleepTemp?.toFixed(2)}°C from baseline (deviations only — not comparable to BBT)` : ''}`
         : 'No wearable data'
 
+      // Day-within-phase: e.g. "Day 8 of 12" in luteal
+      const phasePosition = (() => {
+        if (!phase || !todayCycleDay) return ''
+        const rangeMatch = phase.days.match(/(\d+)[–-](\d+)/)
+        if (!rangeMatch) return ''
+        const phaseStart = parseInt(rangeMatch[1])
+        const phaseEnd = parseInt(rangeMatch[2])
+        const dayInPhase = todayCycleDay - phaseStart + 1
+        const totalDays = phaseEnd - phaseStart + 1
+        return ` — Day ${dayInPhase} of ${totalDays}`
+      })()
+
+      // Yesterday→Today lag context for causal AI reasoning
+      const yesterdayToday = (() => {
+        const now = new Date()
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        const yest = new Date(now)
+        yest.setDate(yest.getDate() - 1)
+        const yesterdayStr = `${yest.getFullYear()}-${String(yest.getMonth() + 1).padStart(2, '0')}-${String(yest.getDate()).padStart(2, '0')}`
+
+        const yesterdayCheckin = checkins.find(c => c.date === yesterdayStr)
+        const todayCheckin = checkins.find(c => c.date === todayStr)
+        if (!yesterdayCheckin || !todayCheckin) return ''
+
+        const diff = (field) => {
+          const t = parseFloat(todayCheckin[field])
+          const y = parseFloat(yesterdayCheckin[field])
+          if (isNaN(t) || isNaN(y)) return ''
+          const d = Math.round((t - y) * 10) / 10
+          return d > 0 ? ` (+${d})` : d < 0 ? ` (${d})` : ' (=)'
+        }
+
+        let text = `Yesterday (Day ${yesterdayCheckin.cycle_day || '?'}): `
+        const parts = []
+        if (yesterdayCheckin.workout_types?.trim()) parts.push(`Did ${yesterdayCheckin.workout_types}`)
+        else if (yesterdayCheckin.activity === 'rest') parts.push('Rest day')
+        if (yesterdayCheckin.diet_tags?.trim()) parts.push(`Diet: ${yesterdayCheckin.diet_tags}`)
+        if (yesterdayCheckin.supplements_taken) parts.push(`Supplements: ${yesterdayCheckin.supplements_taken}`)
+        text += parts.length > 0 ? parts.join(' | ') : 'No activity/diet data'
+        text += ` | Mood: ${yesterdayCheckin.mood || '?'}, Energy: ${yesterdayCheckin.energy || '?'}`
+
+        text += `\nToday (Day ${todayCheckin.cycle_day || '?'}): `
+        text += `Mood: ${todayCheckin.mood || '?'}${diff('mood')}, Energy: ${todayCheckin.energy || '?'}${diff('energy')}, Stress: ${todayCheckin.stress || '?'}${diff('stress')}, Sleep: ${todayCheckin.sleep_quality || '?'}`
+
+        // Highlight notable swings (>= 2 points)
+        const moodSwing = parseFloat(todayCheckin.mood) - parseFloat(yesterdayCheckin.mood)
+        const energySwing = parseFloat(todayCheckin.energy) - parseFloat(yesterdayCheckin.energy)
+        const notables = []
+        if (!isNaN(moodSwing) && Math.abs(moodSwing) >= 2) notables.push(`mood ${moodSwing > 0 ? 'rose' : 'dropped'} ${Math.abs(moodSwing)} points`)
+        if (!isNaN(energySwing) && Math.abs(energySwing) >= 2) notables.push(`energy ${energySwing > 0 ? 'rose' : 'dropped'} ${Math.abs(energySwing)} points`)
+        if (notables.length > 0 && yesterdayCheckin.workout_types?.trim()) {
+          text += `\nNotable: ${notables.join(' and ')} after ${yesterdayCheckin.workout_types} in ${phaseKey || 'unknown'} phase`
+        } else if (notables.length > 0) {
+          text += `\nNotable: ${notables.join(' and ')}`
+        }
+        return text
+      })()
+
       const userMessage = buildUserMessage([
         { heading: 'User Profile', content: getProfileContext() },
         { heading: 'Recent History', content: pastMemory },
-        { heading: 'Current Phase', content: phase ? `${phase.name} (Days ${phase.days}) — ${phaseKey && PHASE_DATA[phaseKey] ? PHASE_DATA[phaseKey].hormones || '' : ''}` : 'Unknown' },
+        { heading: 'Current Phase', content: phase ? `${phase.name} (Days ${phase.days})${phasePosition} — ${phaseKey && PHASE_DATA[phaseKey] ? PHASE_DATA[phaseKey].hormones || '' : ''}` : 'Unknown' },
         { heading: 'Recent Check-ins (1-10 scale)', content: recentCheckins.map(c => `Day ${c.cycle_day}: mood=${c.mood} energy=${c.energy} stress=${c.stress} sleep=${c.sleep_quality || '?'} sx=[${c.symptoms || 'none'}] BBT=${c.bbt || '?'}°F CM=${c.cervical_mucus || '-'}`).join('\n') },
+        { heading: 'Yesterday → Today', content: yesterdayToday },
         { heading: 'Wearable Data', content: wearableSection },
         { heading: 'Bloodwork Flags', content: flaggedBW.length > 0 ? flaggedBW.map(b => `${b.test_name} ${b.status}`).join(', ') : 'none' },
         { heading: 'BBT Ovulation', content: tempAnalysis ? (tempAnalysis.ovulationDetected ? 'Detected' : 'Not detected') : 'Unknown' },
@@ -1115,6 +1175,7 @@ export default function Dashboard() {
                       checkins={checkins} bloodwork={bloodwork} wearable={wearable}
                       phase={phase} phaseKey={phaseKey} tempAnalysis={tempAnalysis} ringDays={ringDays}
                       insights={insights} setInsights={setInsights} riskFlags={riskFlags}
+                      todayCycleDay={todayCycleDay}
                     />
                   )}
 
