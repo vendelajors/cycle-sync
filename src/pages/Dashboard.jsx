@@ -443,7 +443,7 @@ OUTPUT FORMAT (keep each string under 10 words, 3 items per category, 2 for avoi
         ])
 
         try {
-          const data = await callProxy({ system: recsSystem, userMessage, maxTokens: 1024 })
+          const data = await callProxy({ system: recsSystem, userMessage, maxTokens: 4000 })
           return { key: ph.key, data }
         } catch {
           return { key: ph.key, data: { foods: [], workouts: [], activities: [], avoid: [], summary: 'Try regenerating.' } }

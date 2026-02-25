@@ -118,7 +118,7 @@ OUTPUT FORMAT (keep each string under 12 words):
         { heading: 'Evidence-Based Research', content: researchCtx },
       ])
 
-      const data = await callProxy({ system, userMessage, maxTokens: 1500 })
+      const data = await callProxy({ system, userMessage, maxTokens: 4000 })
       setRecs(data)
     } catch (err) {
       console.error('Recs error:', err)
