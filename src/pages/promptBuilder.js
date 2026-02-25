@@ -5,7 +5,7 @@
  * safe JSON parsing, and boundary-aware text truncation.
  */
 
-const PROXY_URL = 'http://localhost:3001/api'
+const PROXY_URL = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api'
 
 const BASE_RULES = `- Respond ONLY with valid JSON. No markdown, no code fences, no extra text.
 - Use Fahrenheit for all temperatures.

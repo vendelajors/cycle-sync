@@ -2653,23 +2653,11 @@ Symptoms: ${Object.entries(PHASE_DATA).map(([key, ph]) => {
 
 Respond in JSON. Keep each phase value SHORT (under 15 words). Include exactly 4 supplements:
 [{"supplement":"name","phases":{"menstrual":"short rec","follicular":"short rec","ovulation":"short rec","luteal":"short rec"},"priority":"high|medium|low","insight":"short insight"}]`
-                                const response = await fetch('http://localhost:3001/api/insights', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+                                const parsed = await callProxy({
+                                  system: buildSystemMessage('supplement specialist'),
+                                  userMessage: prompt,
                                 })
-                                const data = await response.json()
-                                const text = data.content?.map(c => c.text || '').join('') || ''
-                                let clean = text.replace(/```json|```/g, '').trim()
-                                try {
-                                  setSuppAiTips(JSON.parse(clean))
-                                } catch {
-                                  const lastComplete = clean.lastIndexOf('}')
-                                  if (lastComplete > 0) {
-                                    const trimmed = clean.substring(0, lastComplete + 1) + ']'
-                                    setSuppAiTips(JSON.parse(trimmed))
-                                  }
-                                }
+                                setSuppAiTips(Array.isArray(parsed) ? parsed : [])
                               } catch (err) { console.error('Supp AI error:', err) }
                               finally { setSuppAiLoading(false) }
                             }} className="cursor-pointer" style={{
