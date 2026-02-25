@@ -47,9 +47,11 @@ export function buildUserMessage(sections) {
  * @returns {Promise<object>} Parsed JSON response from the AI
  */
 export async function callProxy({ system, userMessage, maxTokens = 1024, endpoint = '/insights', content }) {
+  // Reinforce JSON-only output — models attend most to the end of the prompt
+  const jsonReminder = '\n\nRespond with ONLY valid JSON. No markdown, no headers, no extra text — just the raw JSON object.'
   const messages = content
     ? [{ role: 'user', content }]
-    : [{ role: 'user', content: userMessage }]
+    : [{ role: 'user', content: userMessage + jsonReminder }]
 
   const response = await fetch(`${PROXY_URL}${endpoint}`, {
     method: 'POST',
