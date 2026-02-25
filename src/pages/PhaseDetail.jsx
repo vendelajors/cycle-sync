@@ -107,8 +107,8 @@ function PersonalizedRecs({ phase, phaseKey, checkins, allCheckins, avgMood, avg
 - Cite mechanisms from the research evidence when available.
 - If her energy is low, suggest gentler options. If stress is high, emphasize stress reduction.
 
-OUTPUT FORMAT:
-{"foods":["food -- why","food -- why","food -- why"],"workouts":["workout -- intensity note","workout -- intensity note","workout -- intensity note"],"activities":["activity -- benefit","activity -- benefit","activity -- benefit"],"avoid":["thing -- reason","thing -- reason"],"summary":"One personalized sentence referencing her data"}`)
+OUTPUT FORMAT (keep each string under 12 words):
+{"foods":["food -- short why","food -- short why","food -- short why"],"workouts":["workout -- short note","workout -- short note","workout -- short note"],"activities":["activity -- short benefit","activity -- short benefit","activity -- short benefit"],"avoid":["thing -- short reason","thing -- short reason"],"summary":"One short sentence referencing her data"}`)
 
       const userMessage = buildUserMessage([
         { heading: 'User Profile', content: getProfileContext() },

@@ -421,8 +421,8 @@ function PersonalizedRecs({ phase, selectedPhase, allRecs, setAllRecs, checkins:
 - Prioritize recommendations backed by the research evidence provided. Label anything not from the evidence section as "general guidance."
 - Tailor to this user's conditions, symptoms, and personal data patterns.
 
-OUTPUT FORMAT (3 items per category, 2 for avoid, use " -- " separator):
-{"foods":["food -- mechanism","food -- mechanism","food -- mechanism"],"workouts":["workout -- reason","workout -- reason","workout -- reason"],"activities":["activity -- benefit","activity -- benefit","activity -- benefit"],"avoid":["thing -- reason","thing -- reason"],"summary":"One personalized sentence for this phase"}`)
+OUTPUT FORMAT (keep each string under 10 words, 3 items per category, 2 for avoid):
+{"foods":["food -- short mechanism","food -- short mechanism","food -- short mechanism"],"workouts":["workout -- short reason","workout -- short reason","workout -- short reason"],"activities":["activity -- short benefit","activity -- short benefit","activity -- short benefit"],"avoid":["thing -- short reason","thing -- short reason"],"summary":"One short sentence for this phase"}`)
 
       const fetchPhase = async (ph) => {
         const flaggedBW = bloodwork.filter((b) => b.status === 'low' || b.status === 'high')
