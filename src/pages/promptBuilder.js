@@ -74,6 +74,11 @@ export async function callProxy({ system, userMessage, maxTokens = 1024, endpoin
     throw new Error(`API error: ${data.error?.message || JSON.stringify(data)}`)
   }
 
+  // Log stop reason for debugging truncation issues
+  if (data.stop_reason && data.stop_reason !== 'end_turn') {
+    console.warn(`AI stop_reason: ${data.stop_reason} (usage: ${JSON.stringify(data.usage || {})})`)
+  }
+
   const text = data.content?.map(c => c.text || '').join('') || ''
   if (!text) {
     console.warn('AI returned empty text. Full response:', JSON.stringify(data).substring(0, 500))

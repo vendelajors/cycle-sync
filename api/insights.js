@@ -1,6 +1,9 @@
 // Vercel serverless function — forwards AI requests to Anthropic's API
 // Endpoint: POST /api/insights
 
+// Allow up to 60s for AI generation (Vercel Hobby default is 10s)
+export const maxDuration = 60
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
