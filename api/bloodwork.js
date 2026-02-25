@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   try {
     const body = {
       model: 'claude-sonnet-4-20250514',
-      max_tokens: req.body.max_tokens || 1024,
+      max_tokens: parseInt(req.body.max_tokens) || 4096,
       messages: req.body.messages,
     }
     if (req.body.system) {
