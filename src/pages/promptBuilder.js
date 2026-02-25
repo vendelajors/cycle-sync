@@ -66,7 +66,17 @@ export async function callProxy({ system, userMessage, maxTokens = 1024, endpoin
   }
 
   const data = await response.json()
+
+  // Handle Anthropic API errors (e.g. overloaded, invalid request)
+  if (data.type === 'error') {
+    throw new Error(`API error: ${data.error?.message || JSON.stringify(data)}`)
+  }
+
   const text = data.content?.map(c => c.text || '').join('') || ''
+  if (!text) {
+    console.warn('AI returned empty text. Full response:', JSON.stringify(data).substring(0, 500))
+    throw new Error('AI returned empty response')
+  }
   return safeParseJSON(text)
 }
 
@@ -82,6 +92,10 @@ export async function callProxy({ system, userMessage, maxTokens = 1024, endpoin
 export function safeParseJSON(text) {
   let clean = text.replace(/```json\s?|```/g, '').trim()
 
+  // Strip any leading non-JSON text (AI sometimes adds preamble before the JSON)
+  const jsonStart = clean.search(/[\[{]/)
+  if (jsonStart > 0) clean = clean.substring(jsonStart)
+
   // Attempt 1: direct parse
   try { return JSON.parse(clean) } catch {}
 
@@ -91,12 +105,20 @@ export function safeParseJSON(text) {
     return JSON.parse(fixed)
   } catch {}
 
-  // Attempt 3: truncated JSON — find last } and try parsing up to it
+  // Attempt 3: truncated JSON — find last } or ] and try parsing up to it
   const lastBrace = clean.lastIndexOf('}')
-  if (lastBrace > 0) {
-    try { return JSON.parse(clean.substring(0, lastBrace + 1)) } catch {}
+  const lastBracket = clean.lastIndexOf(']')
+  const lastClose = Math.max(lastBrace, lastBracket)
+  if (lastClose > 0) {
+    try { return JSON.parse(clean.substring(0, lastClose + 1)) } catch {}
+    // Also try fixing trailing commas on the truncated version
+    try {
+      const truncFixed = clean.substring(0, lastClose + 1).replace(/,\s*([\]}])/g, '$1')
+      return JSON.parse(truncFixed)
+    } catch {}
   }
 
+  console.error('safeParseJSON failed. Raw text (first 300 chars):', text.substring(0, 300))
   throw new Error('Could not parse AI response as JSON')
 }
 
