@@ -248,7 +248,7 @@ OUTPUT FORMAT:
         { heading: 'Risk Flags', content: getRiskFlagContext(riskFlags) },
       ])
 
-      const parsed = await callProxy({ system, userMessage, maxTokens: 400 })
+      const parsed = await callProxy({ system, userMessage, maxTokens: 1024 })
       setInsights(parsed.insights)
       // Cache for the day
       localStorage.setItem(cacheKey, JSON.stringify(parsed.insights))
@@ -443,7 +443,7 @@ OUTPUT FORMAT (3 items per category, 2 for avoid, use " -- " separator):
         ])
 
         try {
-          const data = await callProxy({ system: recsSystem, userMessage, maxTokens: 500 })
+          const data = await callProxy({ system: recsSystem, userMessage, maxTokens: 1024 })
           return { key: ph.key, data }
         } catch {
           return { key: ph.key, data: { foods: [], workouts: [], activities: [], avoid: [], summary: 'Try regenerating.' } }
