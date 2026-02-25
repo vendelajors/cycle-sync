@@ -15,13 +15,16 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Parse body — Vercel may pass it as string or object depending on size
+    const parsed = typeof req.body === 'string' ? JSON.parse(req.body) : req.body
+
     const body = {
       model: 'claude-sonnet-4-20250514',
-      max_tokens: parseInt(req.body.max_tokens) || 4096,
-      messages: req.body.messages,
+      max_tokens: 8192,
+      messages: parsed.messages,
     }
-    if (req.body.system) {
-      body.system = req.body.system
+    if (parsed.system) {
+      body.system = parsed.system
     }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
