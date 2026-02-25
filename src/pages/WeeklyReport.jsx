@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { getProfileContext, getUserProfile } from './userProfile'
 import { getRiskFlagContext } from './correlationEngine'
-import { PHASE_DATA } from './cycleData'
+import { PHASE_DATA } from './CycleData'
 import { buildSystemMessage, buildUserMessage, callProxy } from './promptBuilder'
 
 const cToF = (c) => c != null ? Math.round((c * 9 / 5 + 32) * 10) / 10 : null

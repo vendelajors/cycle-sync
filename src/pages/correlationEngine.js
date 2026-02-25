@@ -8,7 +8,7 @@
  * Produces personalized correlations from check-in data.
  */
 
-import { makeAssignPhase } from './cycleData'
+import { makeAssignPhase } from './CycleData'
 
 /**
  * Get the next calendar day as a YYYY-MM-DD string.

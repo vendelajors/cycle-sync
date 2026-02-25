@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { PHASE_DATA, getPhaseFromDay } from './cycleData'
+import { PHASE_DATA, getPhaseFromDay } from './CycleData'
 import { Icons, PhaseIcon } from './icons'
 import { getUserProfile, getProfileContext } from './userProfile'
 import { getResearchContext } from './researchDatabase'

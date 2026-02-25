@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { PHASE_DATA, getPhaseFromDay, makeAssignPhase, getTopBloodworkInsights } from './cycleData'
+import { PHASE_DATA, getPhaseFromDay, makeAssignPhase, getTopBloodworkInsights } from './CycleData'
 import { fetchUltrahumanData, fetchUltrahumanRange, analyzeTemperature, buildTrends, getScoreColor, getScoreLabel, getSleepStageColor } from './ultrahumanParser'
 import { getUserProfile, getProfileContext, getSupplements, saveSupplements, getEstimatedCycleLength } from './userProfile'
 import { getResearchContext } from './researchDatabase'
